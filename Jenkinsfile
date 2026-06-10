@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     stages {
-
         stage('Checkout') {
             steps {
                 checkout scm
@@ -24,6 +23,17 @@ pipeline {
             }
         }
 
+        stage('OWASP Dependency Check') {
+            steps {
+                dependencyCheck additionalArguments: '--scan ./ --format HTML --format XML --out ./dependency-check-report', odcInstallation: 'OWASP-DC'
+            }
+            post {
+                always {
+                    dependencyCheckPublisher pattern: 'dependency-check-report/dependency-check-report.xml'
+                }
+            }
+        }
+
         stage('Build Frontend') {
             steps {
                 dir('frontend') {
@@ -35,10 +45,10 @@ pipeline {
 
     post {
         success {
-            echo ' Build successful!'
+            echo '✅ Build successful!'
         }
         failure {
-            echo ' Build failed. Check logs.'
+            echo '❌ Build failed. Check logs.'
         }
         always {
             cleanWs()
