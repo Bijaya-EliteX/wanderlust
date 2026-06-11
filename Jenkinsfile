@@ -1,13 +1,11 @@
 pipeline {
     agent any
-
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
-
         stage('Setup .env Files') {
             steps {
                 sh '''
@@ -16,17 +14,28 @@ pipeline {
                 '''
             }
         }
-
         stage('Install Dependencies') {
             steps {
                 sh 'npm run installer'
             }
         }
-
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('sonar-server') {
+                    sh '''
+                        npx sonar-scanner \
+                        -Dsonar.projectKey=wanderlust \
+                        -Dsonar.projectName=wanderlust \
+                        -Dsonar.sources=. \
+                        -Dsonar.exclusions=**/node_modules/**
+                    '''
+                }
+            }
+        }
         stage('OWASP Dependency Check') {
             steps {
-                withCredentials([string(credentialsId: 'nvd-api', variable: 'NVD_API_KEY')]){
-                dependencyCheck additionalArguments: "--scan ./ --format HTML --format XML --out ./dependency-check-report --nvdApiKey ${NVD_API_KEY}", odcInstallation: 'OWASP-DC'
+                withCredentials([string(credentialsId: 'nvd-api', variable: 'NVD_API_KEY')]) {
+                    dependencyCheck additionalArguments: "--scan ./ --format HTML --format XML --out ./dependency-check-report --nvdApiKey " + NVD_API_KEY, odcInstallation: 'OWASP-DC'
                 }
             }
             post {
@@ -35,7 +44,6 @@ pipeline {
                 }
             }
         }
-
         stage('Build Frontend') {
             steps {
                 dir('frontend') {
@@ -44,7 +52,6 @@ pipeline {
             }
         }
     }
-
     post {
         success {
             echo ' Build successful!'
