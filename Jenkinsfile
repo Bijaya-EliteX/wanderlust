@@ -25,7 +25,9 @@ pipeline {
 
         stage('OWASP Dependency Check') {
             steps {
-                dependencyCheck additionalArguments: '--scan ./ --format HTML --format XML --out ./dependency-check-report', odcInstallation: 'OWASP-DC'
+                withCredentials([string(credentialsId: 'nvd-api', variable: 'NVD_API_KEY')]){
+                dependencyCheck additionalArguments: "--scan ./ --format HTML --format XML --out ./dependency-check-report --nvdApiKey ${NVD_API_KEY}", odcInstallation: 'OWASP-DC'
+                }
             }
             post {
                 always {
@@ -45,10 +47,10 @@ pipeline {
 
     post {
         success {
-            echo '✅ Build successful!'
+            echo ' Build successful!'
         }
         failure {
-            echo '❌ Build failed. Check logs.'
+            echo ' Build failed. Check logs.'
         }
         always {
             cleanWs()
