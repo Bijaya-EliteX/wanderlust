@@ -32,6 +32,11 @@ pipeline {
                 }
             }
         }
+        stage('Quality Gate') {
+            steps {
+                waitForQualityGate abortPipeline: true
+            }
+        }
         stage('OWASP Dependency Check') {
             steps {
                 withCredentials([string(credentialsId: 'nvd-api', variable: 'NVD_API_KEY')]) {
@@ -44,10 +49,30 @@ pipeline {
                 }
             }
         }
-        stage('Build Frontend') {
+        stage('Build Images') {
             steps {
-                dir('frontend') {
-                    sh 'npm run build'
+                sh 'docker compose build'
+            }
+        }
+        stage('Deploy to Docker Host') {
+            steps {
+                sshagent(['docker-host-ssh']) {
+                    sh '''
+                        ssh -o StrictHostKeyChecking=no ubuntu@172.31.44.133 "
+                            set -e
+                            echo \\"Connected to: \\$(hostname) (\\$(hostname -f))\\"
+                            if [ ! -d ~/wanderlust ]; then
+                                git clone https://github.com/Bijaya-EliteX/wanderlust.git ~/wanderlust
+                            fi
+                            cd ~/wanderlust
+                            git pull origin main
+                            cp -n backend/.env.sample backend/.env || true
+                            docker compose down || true
+                            docker compose up -d --build
+                            docker compose ps
+                            docker ps --format \\"table {{.Names}}\\\\t{{.Status}}\\\\t{{.Ports}}\\\"
+                        "
+                    '''
                 }
             }
         }
