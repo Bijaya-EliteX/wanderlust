@@ -56,7 +56,7 @@ pipeline {
         }
         stage('Deploy to Docker Host') {
             steps {
-                sshagent(['docker-host-ssh']) {
+                sshagent(['docker-ssh-key']) {
                     sh '''
                         ssh -o StrictHostKeyChecking=no ubuntu@172.31.44.133 "
                             set -e
