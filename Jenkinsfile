@@ -26,7 +26,11 @@ pipeline {
 
             withSonarQubeEnv('sonar-server') {
                 sh """
+                    echo "SONAR_HOST_URL = \$SONAR_HOST_URL"
+                    echo "Scanner = ${scannerHome}"
+
                     ${scannerHome}/bin/sonar-scanner \
+                    -Dsonar.host.url=\$SONAR_HOST_URL \
                     -Dsonar.projectKey=wanderlust \
                     -Dsonar.projectName=wanderlust \
                     -Dsonar.sources=. \
