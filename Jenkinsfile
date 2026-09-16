@@ -20,18 +20,22 @@ pipeline {
             }
         }
         stage('SonarQube Analysis') {
-            steps {
-                withSonarQubeEnv('sonar-server') {
-                    sh '''
-                        npx sonar-scanner \
-                        -Dsonar.projectKey=wanderlust \
-                        -Dsonar.projectName=wanderlust \
-                        -Dsonar.sources=. \
-                        -Dsonar.exclusions=**/node_modules/**
-                    '''
-                }
+    steps {
+        script {
+            def scannerHome = tool 'sonar-scanner'
+
+            withSonarQubeEnv('sonar-server') {
+                sh """
+                    ${scannerHome}/bin/sonar-scanner \
+                    -Dsonar.projectKey=wanderlust \
+                    -Dsonar.projectName=wanderlust \
+                    -Dsonar.sources=. \
+                    -Dsonar.exclusions=**/node_modules/**
+                """
             }
         }
+    }
+}
         stage('Quality Gate') {
             steps {
                 waitForQualityGate abortPipeline: true
