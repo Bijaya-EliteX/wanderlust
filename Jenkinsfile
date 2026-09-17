@@ -75,8 +75,7 @@ pipeline {
                             cd ~/wanderlust
                             git pull origin main
                             cp -n backend/.env.sample backend/.env || true
-                            docker compose down || true
-                            docker compose up -d --build
+                            docker compose up -d --build --remove-orphans
                             docker compose ps
                             docker ps --format \\"table {{.Names}}\\\\t{{.Status}}\\\\t{{.Ports}}\\\"
                         "
