@@ -76,12 +76,19 @@ pipeline {
         stage('OWASP Dependency Check') {
             steps {
                 withCredentials([string(credentialsId: 'nvd-api', variable: 'NVD_API_KEY')]) {
-                    dependencyCheck additionalArguments: "--scan ./ --format HTML --format XML --out ./dependency-check-report --nvdApiKey " + NVD_API_KEY, odcInstallation: 'OWASP-DC'
+                    dependencyCheck additionalArguments: "--scan ./ --format HTML --format XML --out ./dependency-check-report --prettyPrint --data /tmp/dependency-check-data --nvdValidForHours 24 --nvdApiKey " + NVD_API_KEY, odcInstallation: 'OWASP-DC'
                 }
             }
             post {
                 always {
-                    dependencyCheckPublisher pattern: 'dependency-check-report/dependency-check-report.xml'
+                    script {
+                        if (fileExists('dependency-check-report/dependency-check-report.xml')) {
+                            dependencyCheckPublisher pattern: 'dependency-check-report/dependency-check-report.xml'
+                        } else {
+                            echo 'OWASP report not found - skipping publisher (check NVD_API_KEY / network)'
+                            // don't fail build if report missing
+                        }
+                    }
                 }
             }
         }
