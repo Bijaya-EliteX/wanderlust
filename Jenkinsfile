@@ -19,30 +19,52 @@ pipeline {
                 sh 'npm run installer'
             }
         }
-        stage('SonarQube Analysis') {
-    steps {
-        script {
-            def scannerHome = tool 'sonar-scanner'
+        stage('Run Tests & Generate Coverage') {
+            steps {
+                sh '''
+                    echo "=== Backend Tests ==="
+                    cd backend
+                    npm test -- --watchAll=false --coverage --coverageReporters=lcov --coverageReporters=text --forceExit --passWithNoTests || true
+                    cd ..
 
-            withSonarQubeEnv('sonar-server') {
-                sh """
-                    echo "SONAR_HOST_URL = \$SONAR_HOST_URL"
-                    echo "Scanner = ${scannerHome}"
-
-                    ${scannerHome}/bin/sonar-scanner \
-                    -Dsonar.host.url=\$SONAR_HOST_URL \
-                    -Dsonar.projectKey=wanderlust \
-                    -Dsonar.projectName=wanderlust \
-                    -Dsonar.sources=. \
-                    -Dsonar.exclusions=**/node_modules/**
-                """
+                    echo "=== Frontend Tests ==="
+                    cd frontend
+                    npm run coverage -- --reporter=verbose || npm run test -- --coverage --reporter=verbose || true
+                    cd ..
+                    
+                    echo "=== Coverage Reports ==="
+                    ls -lh backend/coverage/lcov.info || echo "backend lcov not found"
+                    ls -lh frontend/coverage/lcov.info || echo "frontend lcov not found"
+                '''
             }
         }
-    }
-}
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    def scannerHome = tool 'sonar-scanner'
+                    withSonarQubeEnv('sonar-server') {
+                        sh """
+                            echo "SONAR_HOST_URL = \$SONAR_HOST_URL"
+                            echo "Scanner = ${scannerHome}"
+                            ${scannerHome}/bin/sonar-scanner \
+                            -Dsonar.host.url=\$SONAR_HOST_URL \
+                            -Dsonar.projectKey=wanderlust \
+                            -Dsonar.projectName=wanderlust \
+                            -Dsonar.sources=. \
+                            -Dsonar.exclusions=**/node_modules/**,**/coverage/**,**/dist/**,**/*.test.ts,**/*.test.tsx,**/__tests__/**,**/tests/** \
+                            -Dsonar.javascript.lcov.reportPaths=backend/coverage/lcov.info,frontend/coverage/lcov.info \
+                            -Dsonar.typescript.lcov.reportPaths=backend/coverage/lcov.info,frontend/coverage/lcov.info \
+                            -Dsonar.coverage.exclusions=**/*.test.ts,**/*.test.tsx,**/__tests__/**,**/tests/**,**/vite.config.ts,**/jest.config.ts
+                        """
+                    }
+                }
+            }
+        }
         stage('Quality Gate') {
             steps {
-                waitForQualityGate abortPipeline: false //we have a reason here
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
             }
         }
         stage('OWASP Dependency Check') {
@@ -76,6 +98,18 @@ pipeline {
                             git pull origin main
                             cp -n backend/.env.sample backend/.env || true
                             docker compose up -d --build --remove-orphans
+                            echo \"Waiting for mongo/backend...\"
+                            sleep 10
+                            COUNT=\$(docker exec wanderlust-mongo mongosh --quiet --eval 'db.getSiblingDB("wanderlust").posts.countDocuments()' || echo 0)
+                            echo \"Posts count: \$COUNT\"
+                            if [ \"\$COUNT\" -eq 0 ]; then
+                              echo \"Seeding original data from backend/data/sample_posts.json...\"
+                              docker cp backend/data/sample_posts.json wanderlust-mongo:/tmp/sample_posts.json
+                              docker exec wanderlust-mongo mongoimport --db wanderlust --collection posts --file /tmp/sample_posts.json --jsonArray || true
+                              docker exec wanderlust-redis redis-cli FLUSHALL || true
+                              docker restart wanderlust-backend || true
+                              sleep 5
+                            fi
                             docker compose ps
                             docker ps --format \\"table {{.Names}}\\\\t{{.Status}}\\\\t{{.Ports}}\\\"
                         "
